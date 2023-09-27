@@ -1,3 +1,4 @@
 (require '[nextjournal.clerk :as clerk])
 
-(clerk/serve! {:watch-paths ["notebooks" "src"]})
+(clerk/serve! {:watch-paths ["notebooks" "src"]
+               :browse true})

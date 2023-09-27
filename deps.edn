@@ -1,5 +1,6 @@
-:paths
-["src"] {:deps
+{:paths
+ ["src"]
+ :deps
  {org.clojars.quoll/asami {:mvn/version "2.3.3"}
   com.wsscode/pathom3 {:mvn/version "2023.08.22-alpha"}
   missionary/missionary {:mvn/version "b.32"}}
