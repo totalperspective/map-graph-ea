@@ -60,8 +60,8 @@
 (reg-schema Always)
 
 (defmethod resolver-impl 'always
-  [[_ & args]]
-  (apply pbir/constantly-resolver args))
+  [[_ to val]]
+  (pbir/constantly-resolver to val))
 
 (tests
  (-> (resolver ["always" "some/value" 1])
@@ -69,20 +69,20 @@
      :some/value) := 1)
 
 ;; ### Aliases
-;; The `alias` resolver binds two keywords unidirectionally `:a` abnd `:b`,
-;; so that `:b` resolves to `:a`.
+;; The `alias` resolver binds two keywords unidirectionally `:a` and `:b`,
+;; so that `:a` resolves to `:b`.
 (def Alias
   (mc/schema [:tuple {:title "alias"}
               [:and :symbol [:= 'alias]] :keyword :keyword]))
 
 (defmethod resolver-impl 'alias
-  [[_ & args]]
-  (apply pbir/alias-resolver args))
+  [[_ to from]]
+  (pbir/alias-resolver from to))
 
 (reg-schema Alias)
 
 (tests
-  (-> (resolver ["alias" "other/value" "some/value"])
+  (-> (resolver ["alias" "some/value" "other/value"])
      (eval-1
       {:other/value 2}
       [:some/value])
@@ -94,8 +94,8 @@
               [:and :symbol [:= 'same-as]] :keyword :keyword]))
 
 (defmethod resolver-impl 'same-as
-  [[_ & args]]
-  (apply pbir/equivalence-resolver args))
+  [[_ x y]]
+  (pbir/equivalence-resolver x y))
 
 (reg-schema SameAs)
 
@@ -114,7 +114,7 @@
               [:and :symbol [:= 'x-form]] :keyword :keyword :string]))
 
 (defmethod resolver-impl 'x-form
-  [[_ from to fn-str]]
+  [[_ to from fn-str]]
   (let [fn (sci/eval-string fn-str)]
     (if (fn? fn)
       (pbir/single-attr-resolver from to fn)
@@ -122,8 +122,9 @@
                       {:expression fn-str
                        :result fn})))))
 (reg-schema XForm)
+
 (tests
- (-> (resolver ["x-form" "some/value" "some/twice" "#(* % 2)"])
+ (-> (resolver ["x-form" "some/twice" "some/value" "#(* % 2)"])
      (eval-1
       {:some/value 2}
       [:some/twice])

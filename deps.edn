@@ -6,7 +6,8 @@
   missionary/missionary {:mvn/version "b.32"}
   com.hyperfiddle/rcf {:mvn/version "20220926-202227"}
   metosin/malli {:mvn/version "0.13.0"}
-  org.babashka/sci {:mvn/version "0.8.40"}}
+  org.babashka/sci {:mvn/version "0.8.40"}
+  meander/epsilon {:mvn/version "0.0.650"}}
  :aliases
  {:dev {:extra-paths ["notebooks"]
         :extra-deps {io.github.nextjournal/clerk {:mvn/version "0.14.919"}}
