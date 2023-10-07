@@ -4,8 +4,10 @@
  {org.clojars.quoll/asami {:mvn/version "2.3.3"}
   com.wsscode/pathom3 {:mvn/version "2023.08.22-alpha"}
   missionary/missionary {:mvn/version "b.32"}
- com.hyperfiddle/rcf {:mvn/version "20220926-202227"}}
+  com.hyperfiddle/rcf {:mvn/version "20220926-202227"}
+  metosin/malli {:mvn/version "0.13.0"}
+  org.babashka/sci {:mvn/version "0.8.40"}}
  :aliases
  {:dev {:extra-paths ["notebooks"]
         :extra-deps {io.github.nextjournal/clerk {:mvn/version "0.14.919"}}
-   :jvm-opts ["-XX:-OmitStackTraceInFastThrow"]}}}
+        :jvm-opts ["-XX:-OmitStackTraceInFastThrow"]}}}
