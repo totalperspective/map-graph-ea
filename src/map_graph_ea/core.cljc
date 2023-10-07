@@ -2,7 +2,7 @@
   (:require [missionary.core :as m]
             [com.wsscode.pathom3.connect.indexes :as pci]
             [com.wsscode.pathom3.interface.smart-map :as psm]
-  [hyperfiddle.rcf :as rcf :refer [tests ! %]]))
+            [hyperfiddle.rcf :as rcf :refer [tests ! %]]))
 
 (defn source
   [val]
