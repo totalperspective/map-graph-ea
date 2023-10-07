@@ -29,7 +29,6 @@
     <flow
     (throw (ex-info "Must have a <flow key" {}))))
 
-
 (defn <<map
   [!!indexes !!data]
   (let [<indexes (=< !!indexes)
