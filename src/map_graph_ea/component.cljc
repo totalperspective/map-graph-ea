@@ -83,14 +83,14 @@
 
 (tests
  (def c (parse {:query [:some-value]
-                :resolve {:init-value ['alias :some-value]}
+                :resolve {:init-value ["x-form" :some-value "#(* % 2)"]}
                 :content {:type :my-input
                           :props {:value [:? :init-value]
                                   :label "Input:"}
                           :children []}}))
  (def indexes (pci/register (pbir/global-data-resolver {:some-value 1})))
  (c indexes) := {:type :my-input
-                 :props {:value 1
+                 :props {:value 2
                          :label "Input:"}
                  :children []})
 
