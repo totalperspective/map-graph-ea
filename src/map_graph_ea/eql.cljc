@@ -3,7 +3,8 @@
             [malli.core :as mc]
             [malli.error :as me]
             [malli.registry :as mr]
-            [malli.transform :as mt]))
+            [malli.transform :as mt])
+  (:import [java.lang Exception]))
 
 (defn ->list
   [x]

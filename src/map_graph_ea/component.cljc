@@ -22,7 +22,7 @@
                                            [:cat :symbol :keyword [:+ any?]]]]]
               [:content any?]]))
 
-#_{:clj-kondo/ignore [:unresolved-symbol]}
+#_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var]}
 (defn resolvers
   [resolve-map]
   (m/rewrite
