@@ -1,7 +1,6 @@
 ;; # Components
 (ns map-graph-ea.component
-  (:require [clojure.walk :refer [prewalk]]
-            [com.wsscode.pathom3.connect.built-in.resolvers :as pbir]
+  (:require [com.wsscode.pathom3.connect.built-in.resolvers :as pbir]
             [com.wsscode.pathom3.connect.indexes :as pci]
             [com.wsscode.pathom3.interface.eql :as p.eql]
             [com.wsscode.pathom3.interface.smart-map :as psm]
@@ -10,6 +9,7 @@
             [malli.error :as me]
             [malli.transform :as mt]
             [map-graph-ea.eql :refer [Query]]
+            [map-graph-ea.template :as t :refer [Template]]
             [map-graph-ea.resolve :as r]
             [meander.epsilon :as m]))
 
@@ -20,7 +20,7 @@
               [:resolve [:map-of :keyword [:or
                                            [:cat :symbol any?]
                                            [:cat :symbol :keyword [:+ any?]]]]]
-              [:content any?]]))
+              [:content Template]]))
 
 #_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var]}
 (defn resolvers
@@ -40,31 +40,6 @@
              :a ['b :c 1]}) := [['bar :foo :baz]
                                 ['b :a :c 1]])
 
-(def path-coerce
-  (mc/coercer
-   [:+ :keyword]
-   mt/string-transformer))
-
-(defn emit
-  [content ctx]
-  (let [expand (fn [node]
-                 (if (and (map? node) (= (count node) 1) (#{:? "?"} (ffirst node)))
-                   (let [[[_ key]] (seq node)
-                         path (path-coerce (if (sequential? key) key [key]))]
-                     (emit (get-in ctx path)
-                      ctx))
-                   node))]
-    (prewalk expand content)))
-
-(tests
- (emit 1 {}) := 1
- (emit {:? :foo} {:foo 2}) := 2
- (emit {"?" "foo"} {:foo 2}) := 2
- (emit [1 2] {}) := [1 2]
- (emit {:a 1} {}) := {:a 1}
- (emit {:a {:? :foo} :b {:? :bar}} {:foo 3}) := {:a 3 :b nil}
- (emit {:a {:? :bar}} {:foo 4 :bar {:? :foo}}) := {:a 4})
-
 ;; The parse take a component definition and returns a function.
 ;; The function, given an environment will run the compoent yeilding the content
 (defn parse-impl
@@ -76,7 +51,7 @@
     (fn [env]
       (let [data (p.eql/process env query)
             smart-map (psm/smart-map indexes data)]
-        (emit content smart-map)))))
+        (t/emit content smart-map)))))
 
 (defn parse
   [form]
@@ -92,14 +67,14 @@
 (tests
  (def c (parse {:query ["some-value"]
                 :resolve {:init-value ["x-form" "some-value" "#(* % 2)"]}
-                :content {:type :my-input
-                          :props {:value {"?" ["init-value"]}
-                                  :label "Input:"}
+                :content {:type "my-input"
+                          :props {:value {:? ["init-value"]}
+                                  :label "Value:"}
                           :children []}}))
  (def indexes (pci/register (pbir/global-data-resolver {:some-value 1})))
- (c indexes) := {:type :my-input
+ (c indexes) := {:type "my-input"
                  :props {:value 2
-                         :label "Input:"}
+                         :label "Value:"}
                  :children []})
 
 (comment
