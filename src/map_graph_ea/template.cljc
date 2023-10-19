@@ -1,3 +1,4 @@
+;; # Templates
 (ns map-graph-ea.template
   (:require [hyperfiddle.rcf :refer [tests]]
             [malli.core :as mc]
