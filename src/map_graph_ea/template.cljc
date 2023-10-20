@@ -197,10 +197,13 @@
    [!xs ...]
    [(m/cata !xs) ...] 
 
+   {& (m/seqable [!k !v] ...)}
+   {& [[!k (m/cata !v)] ...]} 
+
    ?x
    ?x))
 
-(declare interpret-template)
+#_(declare interpret-template)
 
 (defn interpret-template
   [expr env]
@@ -219,7 +222,7 @@
     (let [?array-sym (get-in ?env ?path)]
       (if (seqable? ?array-sym)
         (let [?count-sym (if (counted? ?array-sym)
-                           (count ?array-sym) 
+                           (count ?array-sym)
                            -1)]
           (transduce (comp
                       (filter (if ?select-str
@@ -268,28 +271,21 @@
                conj
                !exprs)
 
+    [{& ?rest} ?env]
+    (reduce-kv (fn [m k v]
+                 (assoc m k (interpret-template v ?env)))
+               {}
+               ?rest) 
+    
     [?expr ?env]
     ?expr))
 
-(defn emitter
-  [template]
-  (fn [ctx]
-    (when template
-      (let [t (parse-template template)
-            expand (fn [node]
-                     (if (and (map? node) (= (count node) 1) (#{:? "?"} (ffirst node)))
-                       (let [[[_ path]] (seq node)
-                             e (emitter (if (seq? path)
-                                          (get-in ctx path)
-                                          (get ctx path)))]
-                         (e ctx))
-                       node))]
-        (prewalk expand t)))))
-
 (defn emit
   [content ctx]
-  ((emitter content) ctx))
-  
+  (-> content
+      parse-template
+      parse-form
+      (interpret-template ctx)))
 
 (tests
  (emit 1 {}) := 1
