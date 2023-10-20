@@ -6,7 +6,8 @@
             [malli.error :as me]
             [malli.registry :as mr]
             [malli.transform :as mt]
-            [meander.epsilon :as m])
+            [meander.epsilon :as m]
+            [sci.core :as sci])
   (:import [java.lang Exception]))
 
 (def spec
@@ -199,21 +200,76 @@
    ?x
    ?x))
 
+(declare interpret-template)
+
 (defn interpret-template
   [expr env]
-  (m/match
+  (m/match 
    [expr env]
 
-   (m/and
-    [{:?* ?path} ?env]
-    (m/let [?env-sym (gensym "_env_")]))
-   (let [?env-sym (m/cata [{:? ?path} ?env])]
-     ?env-sym)
-   
-   [{:? ?x} ?env]
-   (if (vector? ?x)
-     (get-in ?env ?x) 
-     (get ?env ?x))))
+    (m/and
+     [{::tag :list 
+       ::path ?path
+       ::env ?rename
+       ::select-fn ?select-str
+       ::index-fn ?index-str
+       ::rows ?rows} ?env]
+     (m/let [?array-sym (gensym "_array_")
+             ?count-sym (gensym "_count_")]))
+    (let [?array-sym (get-in ?env ?path)]
+      (if (seqable? ?array-sym)
+        (let [?count-sym (if (counted? ?array-sym)
+                           (count ?array-sym) 
+                           -1)]
+          (transduce (comp
+                      (filter (if ?select-str
+                                (sci/eval-string ?select-str)
+                                (constantly true)))
+                      (map (fn [item]
+                             (interpret-template (parse-form item) ?env)))
+                      (map (if ?rename
+                             (fn [row]
+                               (reduce-kv
+                                (fn [m k v]
+                                  (assoc m k (interpret-template v row)))
+                                {}
+                                ?rename))
+                             identity))
+                      (map-indexed (let [idx-fn (if ?index-str
+                                                  (sci/eval-string ?index-str)
+                                                  (fn [idx _] idx))]
+                                     (fn [idx item]
+                                       {:row idx 
+                                        :item item 
+                                        :idx (idx-fn idx item) 
+                                        :max (dec ?count-sym)})))
+                      (map (fn [{:keys [idx max item] :as m}]
+                             (if ?rows
+                               (let [index (if ?index-str
+                                             idx
+                                             (cond
+                                               (= 0 idx) :<
+                                               (= max idx) :>
+                                               :else :.))
+                                     template (or (get ?rows idx)
+                                                  (get ?rows index)
+                                                  (:* ?rows))]
+                                 (interpret-template template (assoc m :.. ?env :. item)))
+                               item))))
+                     conj
+                     ?array-sym))
+        (throw (ex-info "Not a sequence" {:path ?path :data ?array-sym}))))
+
+    [{::tag :get ::path ?path} ?env]
+    (interpret-template (parse-form (get-in ?env ?path)) ?env)
+
+    [[!exprs ...] ?env]
+    (transduce (map #(interpret-template % ?env))
+               conj
+               !exprs)
+
+    [?expr ?env]
+    ?expr))
 
 (defn emitter
   [template]
