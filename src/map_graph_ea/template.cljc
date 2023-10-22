@@ -1,7 +1,6 @@
 ;; # Templates
 (ns map-graph-ea.template
   (:require [hyperfiddle.rcf :refer [tests]]
-            [clojure.walk :refer [prewalk]]
             [malli.core :as mc]
             [malli.error :as me]
             [malli.registry :as mr]
@@ -37,14 +36,14 @@
            [:=> {:optional true :title "select"} :string]
            [:#> {:optional true :title "rename"} [:map-of ::property ::path]]]
            ;
-           
-   ::directive [:and 
+
+   ::directive [:and
                 [:map-of :keyword any?]
                 [:orn
-                 [:get ::get] 
+                 [:get ::get]
                  [:each ::each]]]
                  ;
-                 
+
    ::template-expr [:orn
                     [:scalar ::scalar]
                     [:directive ::directive]]
@@ -127,7 +126,7 @@
                          :<= {0 ["li" {:? :value}]
                               1 ["li.odd" {:? :value}]}}})
                         ;
-                         
+
  (->> template-forms
       (map (fn [form]
              (try
@@ -164,15 +163,15 @@
    {:<= {& (m/seqable [!k !t] ...)} & (m/cata ?rest)}
    {::rows {& [[!k (m/cata !t)] ...]}
     & ?rest}
-   
+
    {:#> {& (m/seqable [!k !p] ...)} & (m/cata ?rest)}
    {::env {& [[!k (m/cata {:? !p})] ...]}
     & ?rest}
-   
+
    {:=> (m/some ?fn) & (m/cata ?rest)}
    {::select-fn ?fn
     & ?rest}
-   
+
    {:%> (m/some ?fn) & (m/cata ?rest)}
    {::index-fn ?fn
     & ?rest}
@@ -181,7 +180,7 @@
    {::tag :list
     ::path [!xs ...]
     ::meta ?rest}
-   
+
    {:?* (m/some ?x) & (m/cata ?rest)}
    {::tag :list
     ::path [?x]
@@ -196,10 +195,10 @@
     ::path [?x]}
 
    [!xs ...]
-   [(m/cata !xs) ...] 
+   [(m/cata !xs) ...]
 
    {& (m/seqable [!k !v] ...)}
-   {& [[!k (m/cata !v)] ...]} 
+   {& [[!k (m/cata !v)] ...]}
 
    ?x
    ?x))
@@ -209,11 +208,11 @@
 (defn interpret-template
   [expr env]
   #_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var]}
-  (m/match 
+  (m/match
    [expr env]
 
     (m/and
-     [{::tag :list 
+     [{::tag :list
        ::path ?path
        ::env ?rename
        ::select-fn ?select-str
@@ -245,9 +244,9 @@
                                                   (fn [idx _] idx))]
                                      (fn [idx item]
                                        #_(prn idx item)
-                                       {:row idx 
-                                        :item item 
-                                        :idx (idx-fn idx item) 
+                                       {:row idx
+                                        :item item
+                                        :idx (idx-fn idx item)
                                         :max (dec ?count-sym)})))
                       (map (fn [{:keys [idx max item] :as m}]
                              (if ?rows
@@ -278,8 +277,8 @@
     (reduce-kv (fn [m k v]
                  (assoc m k (interpret-template v ?env)))
                {}
-               ?rest) 
-    
+               ?rest)
+
     [?expr ?env]
     ?expr))
 

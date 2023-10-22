@@ -1,6 +1,6 @@
 ;; # Resolvers
 (ns map-graph-ea.resolve
-  (:require [hyperfiddle.rcf :as rcf :refer [tests ! %]]
+  (:require [hyperfiddle.rcf :as rcf :refer [tests]]
             [com.wsscode.pathom3.connect.indexes :as pci]
             [com.wsscode.pathom3.connect.built-in.resolvers :as pbir]
             [com.wsscode.pathom3.interface.eql :as p.eql]
@@ -14,7 +14,7 @@
   (atom {:schemas []
          :base [:or]}))
 
-(defn reg-schema 
+(defn reg-schema
   [schema]
   (swap! SchemaRegistry
          (fn [reg]
@@ -90,7 +90,7 @@
 
 ;; The `same-as` resolver is similar to `alias` but is bidirectional.
 (def SameAs
-  (mc/schema [:tuple {:title "same-as"} 
+  (mc/schema [:tuple {:title "same-as"}
               [:and :symbol [:= 'same-as]] :keyword :keyword]))
 
 (defmethod resolver-impl 'same-as

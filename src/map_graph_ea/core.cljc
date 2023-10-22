@@ -2,7 +2,7 @@
   (:require [missionary.core :as m]
             [com.wsscode.pathom3.connect.indexes :as pci]
             [com.wsscode.pathom3.interface.smart-map :as psm]
-            [hyperfiddle.rcf :as rcf :refer [tests ! %]]))
+            [hyperfiddle.rcf :as rcf :refer [tests tap %]]))
 
 (defn source
   [val]
@@ -48,7 +48,7 @@
   "sources"
   (def !!x (source 0))
   (def dispose ((m/reactor
-                 (m/stream! (m/ap (! (inc (m/?< (=< !!x)))))))
+                 (m/stream! (m/ap (tap (inc (m/?< (=< !!x)))))))
                 (fn [_] #_(prn ::done))
                 #(do %)))
   % := 1
@@ -66,7 +66,7 @@
   (def !!data (source {:x 1}))
   (def !!m (<<map !!indexes !!data))
   (def dispose ((m/reactor
-                 (m/stream! (m/ap (! (:x (m/?< (=< !!m)))))))
+                 (m/stream! (m/ap (tap (:x (m/?< (=< !!m)))))))
                 (fn [_] #_(prn ::done))
                 #(prn ::maps.crash %)))
   % := 1
