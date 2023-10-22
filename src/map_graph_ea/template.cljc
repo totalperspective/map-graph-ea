@@ -157,6 +157,7 @@
 
 (defn parse-form
   [expr]
+  #_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var]}
   (m/rewrite
    expr
 
@@ -207,7 +208,7 @@
 
 (defn interpret-template
   [expr env]
-  #_(prn expr env)
+  #_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var]}
   (m/match 
    [expr env]
 
