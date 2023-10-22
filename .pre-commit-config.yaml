@@ -11,4 +11,4 @@ repos:
   - repo: https://github.com/clj-kondo/clj-kondo
     rev: v2023.10.20
     hooks:
-      - id: clj-kondo
+      - id: clj-kondo-docker

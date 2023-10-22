@@ -1,1 +1,2 @@
-{:lint-as {com.wsscode.pathom3.connect.operation/defresolver clojure.core/defn}}
+{:lint-as {com.wsscode.pathom3.connect.operation/defresolver clojure.core/defn}
+ :output {:pattern "::{{level}} file={{filename}},line={{row}},col={{col}}::{{message}}"}}
