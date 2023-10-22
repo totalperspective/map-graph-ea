@@ -94,7 +94,7 @@
                         ["foo" "bar"]
                         ; Objects
                         {:foo "bar"}
-                        ; Nexted objects
+                        ; Nested objects
                         {:foo "bar"
                          :baz {:a {:b "c"}}}
                         ; Directives
@@ -123,7 +123,7 @@
                                :> ["li.odd" {:? []}]}}
                         ; Alt index fn
                         {:?* []
-                         :%> "(fn [idx _] mod idx 1)"
+                         :%> "(fn [idx _] (mod idx 1))"
                          :<= {0 ["li" {:? :value}]
                               1 ["li.odd" {:? :value}]}}})
                         ;
@@ -207,6 +207,7 @@
 
 (defn interpret-template
   [expr env]
+  #_(prn expr env)
   (m/match 
    [expr env]
 
@@ -242,6 +243,7 @@
                                                   (sci/eval-string ?index-str)
                                                   (fn [idx _] idx))]
                                      (fn [idx item]
+                                       #_(prn idx item)
                                        {:row idx 
                                         :item item 
                                         :idx (idx-fn idx item) 
@@ -287,6 +289,8 @@
       parse-form
       (interpret-template ctx)))
 
+^{:nextjournal.clerk/auto-expand-results? true
+  :nextjournal.clerk/no-cache true}
 (tests
  (emit 1 {}) := 1
  (emit {:? :foo} {:foo 2}) := 2
@@ -294,4 +298,10 @@
  (emit [1 2] {}) := [1 2]
  (emit {:a 1} {}) := {:a 1}
  (emit {:a {:? :foo} :b {:? :bar}} {:foo 3}) := {:a 3 :b nil}
- (emit {:a {:? :bar}} {:foo 4 :bar {:? :foo}}) := {:a 4})
+ (emit {:a {:? :bar}} {:foo 4 :bar {:? :foo}}) := {:a 4}
+ (emit {:?* [:list]
+        :%> "(fn [idx _] (mod idx 2))"
+        :<= {0 ["li" {:? [:.]}]
+             1 ["li.odd" {:? [:.]}]}}
+       {:list [:first :second :third]})
+ := [["li" :first] ["li.odd" :second] ["li" :third]])
