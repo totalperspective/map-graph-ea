@@ -41,9 +41,11 @@
 ;; To make a smart map reactive we can simply use an atom
 (defonce !smart-map (atom nil))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn init-map! []
   (reset! !smart-map smart-map))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn change-name! []
   (swap! !smart-map #(assoc % ::last-name "Oliver")))
 
@@ -82,12 +84,13 @@
 
 (defonce !full-name (atom nil))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn init-person! []
   (prn "init-person!")
   (prn (reset! !person-data person-data))
   (let [<full-name (m/signal (m/eduction (take 1) full-name-value))
         _ (prn <full-name)
-        task (m/reduce (fn [_ n] 
+        task (m/reduce (fn [_ n]
                          (println "init-person! " n)
                          (reset! !full-name n))
                        nil
@@ -98,6 +101,7 @@
     (prn dispose!)
     (prn (dispose!))))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn change-person-name! []
   (swap! !person-data #(assoc % ::last-name "Oliver")))
 

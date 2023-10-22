@@ -1,2 +1,5 @@
-{:lint-as {com.wsscode.pathom3.connect.operation/defresolver clojure.core/defn}
+{:lint-as {com.wsscode.pathom3.connect.operation/defresolver clojure.core/defn
+           meander.epsilon/let clojure.core/let
+           meander.epsilon/match clojure.core.match/match
+           meander.epsilon/rewrite clojure.core.match/match}
  :output {:pattern "::{{level}} file={{filename}},line={{row}},col={{col}}::{{message}}"}}
