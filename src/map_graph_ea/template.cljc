@@ -37,11 +37,16 @@
            [:#> {:optional true :title "rename"} [:map-of ::property ::path]]]
            ;
 
+   ::invoke [:map
+             {:closed true}
+             [:! {:title "invoke"} ::path]
+             [:!? {:optional true} [:catn [:params [:? [:schema [:ref ::template]]]]]]]
    ::directive [:and
                 [:map-of :keyword any?]
                 [:orn
                  [:get ::get]
-                 [:each ::each]]]
+                 [:each ::each]
+                 [:invoke ::invoke]]]
                  ;
 
    ::template-expr [:orn
@@ -124,8 +129,10 @@
                         {:?* []
                          :%> "(fn [idx _] (mod idx 1))"
                          :<= {0 ["li" {:? :value}]
-                              1 ["li.odd" {:? :value}]}}})
-                        ;
+                              1 ["li.odd" {:? :value}]}}
+                        ; Invoke
+                        {:! [:component]
+                         :!? [{:? [:path :to :var]}]}})
 
  (->> template-forms
       (map (fn [form]
@@ -159,12 +166,22 @@
   #_{:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var]}
   (m/rewrite
    expr
+   {:!? (m/some (m/seqable !args ...))
+    & (m/cata ?rest)}
+   {::args [(m/cata !args) ...]
+    & ?rest}
 
-   {:<= {& (m/seqable [!k !t] ...)} & (m/cata ?rest)}
+   {:! (m/some ?x)}
+   {::tag :invoke
+    ::fn (m/cata ?x)}
+
+   {:<= {& (m/seqable [!k !t] ...)}
+    & (m/cata ?rest)}
    {::rows {& [[!k (m/cata !t)] ...]}
     & ?rest}
 
-   {:#> {& (m/seqable [!k !p] ...)} & (m/cata ?rest)}
+   {:#> {& (m/seqable [!k !p] ...)}
+    & (m/cata ?rest)}
    {::env {& [[!k (m/cata {:? !p})] ...]}
     & ?rest}
 
@@ -194,6 +211,9 @@
    {::tag :get
     ::path [?x]}
 
+   (!xs ...)
+   [(m/cata !xs) ...]
+
    [!xs ...]
    [(m/cata !xs) ...]
 
@@ -206,91 +226,128 @@
 #_{:clj-kondo/ignore [:syntax :unused-binding]}
 (defn interpret-template
   [expr env]
-  (m/match
-   [expr env]
+  (when (instance? Exception env)
+    (throw env))
+  (when (instance? Exception expr)
+    (throw expr))
+  (tap> expr)
+  (let [result (m/match
+                [expr env]
+                 [(m/and (m/pred keyword?) ?k) ?env]
+                 (do
+                   (tap> {:keyword ?k})
+                   ?k)
 
-    (m/and
-     [{::tag :list
-       ::path ?path
-       ::env ?rename
-       ::select-fn ?select-str
-       ::index-fn ?index-str
-       ::rows ?rows} ?env]
-     (m/let [?array-sym (gensym "_array_")
-             ?count-sym (gensym "_count_")]))
-    (let [?array-sym (get-in ?env ?path)]
-      (if (seqable? ?array-sym)
-        (let [?count-sym (if (counted? ?array-sym)
-                           (count ?array-sym)
-                           -1)]
-          (transduce (comp
-                      (filter (if ?select-str
-                                (sci/eval-string ?select-str)
-                                (constantly true)))
-                      (map (fn [item]
-                             (interpret-template (parse-form item) ?env)))
-                      (map (if ?rename
-                             (fn [row]
-                               (reduce-kv
-                                (fn [m k v]
-                                  (assoc m k (interpret-template v row)))
-                                {}
-                                ?rename))
-                             identity))
-                      (map-indexed (let [idx-fn (if ?index-str
-                                                  (sci/eval-string ?index-str)
-                                                  (fn [idx _] idx))]
-                                     (fn [idx item]
-                                       #_(prn idx item)
-                                       {:row idx
-                                        :item item
-                                        :idx (idx-fn idx item)
-                                        :max (dec ?count-sym)})))
-                      (map (fn [{:keys [idx max item] :as m}]
-                             (if ?rows
-                               (let [index (if ?index-str
-                                             idx
-                                             (cond
-                                               (= 0 idx) :<
-                                               (= max idx) :>
-                                               :else :.))
-                                     template (or (get ?rows idx)
-                                                  (get ?rows index)
-                                                  (:* ?rows))]
-                                 (interpret-template template (assoc m :.. ?env :. item)))
-                               item))))
-                     conj
-                     ?array-sym))
-        (throw (ex-info "Not a sequence" {:path ?path :data ?array-sym}))))
+                 [{::tag :invoke ::fn (m/some ?fn) ::args ?args} ?env]
+                 (let [fn (interpret-template ?fn ?env)
+                       args (if (nil? ?args)
+                              [?env]
+                              (map #(interpret-template % ?env) ?args))]
+                   (tap> [{:?fn ?fn :?args ?args} {:fn fn :args args}])
+                   (if (fn? fn)
+                     (try
+                       (apply fn args)
+                       (catch Exception e
+                         e))
+                     (ex-info "Expression did not yeild a function"
+                              {:expr ?fn
+                               :actual fn})))
+                 (m/and
+                  [{::tag :list
+                    ::path ?path
+                    ::env ?rename
+                    ::select-fn ?select-str
+                    ::index-fn ?index-str
+                    ::rows ?rows} ?env]
+                  (m/let [?array-sym (gensym "_array_")
+                          ?count-sym (gensym "_count_")]))
+                 (let [?array-sym (get-in ?env ?path)]
+                   (if (sequential? ?array-sym)
+                     (let [?count-sym (when (counted? ?array-sym)
+                                        (count ?array-sym))]
+                       (transduce (comp
+                                   (filter (if ?select-str
+                                             (sci/eval-string ?select-str)
+                                             (constantly true)))
+                                   (map (fn [item]
+                                          (interpret-template (parse-form item) ?env)))
+                                   (map (if (map? ?rename)
+                                          (fn [row]
+                                            (reduce-kv
+                                             (fn [m k v]
+                                               (tap> [m k v])
+                                               (assoc m k (interpret-template v row)))
+                                             {}
+                                             ?rename))
+                                          identity))
+                                   (map-indexed (let [idx-fn (if ?index-str
+                                                               (sci/eval-string ?index-str)
+                                                               (fn [idx _] idx))]
+                                                  (fn [idx item]
+                                                    #_(prn idx item)
+                                                    {:row idx
+                                                     :item item
+                                                     :idx (idx-fn idx item)
+                                                     :max (when ?count-sym (dec ?count-sym))})))
+                                   (map (fn [{:keys [idx max item] :as m}]
+                                          (if ?rows
+                                            (let [index (if ?index-str
+                                                          idx
+                                                          (cond
+                                                            (= 0 idx) :<
+                                                            (= max idx) :>
+                                                            :else :.))
+                                                  template (or (get ?rows idx)
+                                                               (get ?rows index)
+                                                               (:* ?rows))]
+                                              (interpret-template template (assoc m :.. ?env :. item)))
+                                            item))))
+                                  conj
+                                  ?array-sym))
+                     []))
 
-    [{::tag :get ::path ?path} ?env]
-    (interpret-template (parse-form (get-in ?env ?path)) ?env)
+                 [{::tag :get ::path ?path} ?env]
+                 (let [val (get-in ?env ?path)
+                       result (interpret-template (parse-form val) ?env)]
+                   (tap> {:get ?path :result val :final result})
+                   (when (not= result :com.wsscode.pathom3.error/attribute-unreachable)
+                     result))
 
-    [[!exprs ...] ?env]
-    (transduce (map #(interpret-template % ?env))
-               conj
-               !exprs)
+                 [[!exprs ...] ?env]
+                 (transduce (map #(interpret-template % ?env))
+                            conj
+                            !exprs)
 
-    [{& ?rest} ?env]
-    (reduce-kv (fn [m k v]
-                 (assoc m k (interpret-template v ?env)))
-               {}
-               ?rest)
+                 [{& ?rest} ?env]
+                 (reduce-kv (fn [m k v]
+                              (assoc m k (interpret-template v ?env)))
+                            {}
+                            ?rest)
 
-    [?expr ?env]
-    ?expr))
+                 [?expr ?env]
+                 ?expr)]
+                 (when (instance? Exception result)
+                   (throw result))
+                 (tap> {:fn 'interpret-template :expr expr :env env :result result})
+                 result))
+
+(defn emitter
+  [content]
+  (let [template (-> content
+                     parse-template
+                     parse-form)]
+    (fn [ctx]
+      (interpret-template template ctx))))
 
 (defn emit
   [content ctx]
-  (-> content
-      parse-template
-      parse-form
-      (interpret-template ctx)))
+  ((emitter content) ctx))
 
 ^{:nextjournal.clerk/auto-expand-results? true
   :nextjournal.clerk/no-cache true}
 (tests
  (emit 1 {}) := 1
+ (emit "string" {}) := "string"
  (emit {:? :foo} {:foo 2}) := 2
  (emit {"?" "foo"} {:foo 2}) := 2
  (emit [1 2] {}) := [1 2]
@@ -302,4 +359,15 @@
         :<= {0 ["li" {:? [:.]}]
              1 ["li.odd" {:? [:.]}]}}
        {:list [:first :second :third]})
- := [["li" :first] ["li.odd" :second] ["li" :third]])
+ := [["li" :first] ["li.odd" :second] ["li" :third]]
+ (emit {:?* [:list]
+        :<= {:* {:? [:.]}}}
+       {:list [:first :second :third]}) := [:first :second :third]
+ (emit {:?* [:list]
+        :<= {:* {:? [:.]}}}
+       {:list :not-a-list}) := []
+ (emit {:! {:? [:fn]}}
+       {:fn #(get % :var) :var 1}) := 1
+ (emit {:! {:? :inc}
+        :!? [{:? :value}]}
+       {:inc inc :value 1}) := 2)

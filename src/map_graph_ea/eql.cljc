@@ -49,11 +49,11 @@
                [:mutation-join [:schema [:ref ::mutation-join]]]]
    ::mutation-query [:catn [:mutation [:* ::mutation]]]
    ::query-expr [:orn
+                 [:special ::special-property]
                  [:prop ::property]
                  [:join [:schema [:ref ::join]]]
                  [:ident ::ident]
-                 [:param-exp [:schema [:ref ::param-expr]]]
-                 [:special ::special-property]]
+                 [:param-exp [:schema [:ref ::param-expr]]]]
    ::query [:catn [:query-expr [:* ::query-expr]]]})
 
 (def registry

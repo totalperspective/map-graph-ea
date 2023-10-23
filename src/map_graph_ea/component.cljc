@@ -17,9 +17,10 @@
 (def Component
   (mc/schema [:map
               [:query Query]
-              [:resolve [:map-of :keyword [:or
-                                           [:cat :symbol any?]
-                                           [:cat :symbol :keyword [:+ any?]]]]]
+              [:resolve {:optional true}
+               [:map-of :keyword [:or
+                                  [:cat :symbol any?]
+                                  [:cat :symbol :keyword [:+ any?]]]]]
               [:content Template]]))
 
 (defn resolvers
@@ -43,15 +44,21 @@
 ;; The parse take a component definition and returns a function.
 ;; The function, given an environment will run the compoent yeilding the content
 (defn parse-impl
-  [{:keys [query resolve content]}]
+  [{:keys [query resolve content] :as t}]
   (let [indexes (->> resolve
                      resolvers
                      (mapv r/resolver)
-                     pci/register)]
+                     pci/register)
+        emit (t/emitter content)]
     (fn [env]
-      (let [data (p.eql/process env query)
+      (tap> {:fn parse-impl :template t :env env})
+      (let [data (p.eql/process (pci/register [(pbir/global-data-resolver env)])
+                                query)
             smart-map (psm/smart-map indexes data)]
-        (t/emit content smart-map)))))
+        (tap> {:fn 'render-component :query query :data data :map smart-map})
+        (if (map? smart-map)
+          (emit smart-map)
+          (throw (ex-info "Query failed" {:data data :map smart-map})))))))
 
 (defn parse
   [form]
@@ -71,11 +78,15 @@
                           :props {:value {:? ["init-value"]}
                                   :label "Value:"}
                           :children []}}))
- (def indexes (pci/register (pbir/global-data-resolver {:some-value 1})))
- (c indexes) := {:type "my-input"
-                 :props {:value 2
-                         :label "Value:"}
-                 :children []})
+ (def data {:some-value 1})
+ (c data) := {:type "my-input"
+              :props {:value 2
+                      :label "Value:"}
+              :children []}
+ (c {}) := {:type "my-input"
+            :props {:value nil
+                    :label "Value:"}
+            :children []})
 
 (comment
   ;; End
