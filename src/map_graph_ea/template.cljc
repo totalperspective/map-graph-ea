@@ -40,7 +40,7 @@
    ::invoke [:map
              {:closed true}
              [:! {:title "invoke"} ::path]
-             [:!? {:optional true} [:catn [:params [:? [:schema [:ref ::template]]]]]]]
+             [:!? {:optional true} [:map-of ::property [:schema [:ref ::template]]]]]
    ::directive [:and
                 [:map-of :keyword any?]
                 [:orn
@@ -131,8 +131,8 @@
                          :<= {0 ["li" {:? :value}]
                               1 ["li.odd" {:? :value}]}}
                         ; Invoke
-                        {:! [:component]
-                         :!? [{:? [:path :to :var]}]}})
+                        {:! {:? :fn}
+                         :!? {:my-var {:? [:path :to :var]}}}})
 
  (->> template-forms
       (map (fn [form]
@@ -166,9 +166,9 @@
   #_{:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var]}
   (m/rewrite
    expr
-   {:!? (m/some (m/seqable !args ...))
+   {:!? {& (m/seqable [!k !t] ...)}
     & (m/cata ?rest)}
-   {::args [(m/cata !args) ...]
+   {::env {& [[!k (m/cata !t)] ...]}
     & ?rest}
 
    {:! (m/some ?x)}
@@ -238,15 +238,13 @@
                    (tap> {:keyword ?k})
                    ?k)
 
-                 [{::tag :invoke ::fn (m/some ?fn) ::args ?args} ?env]
+                 [{::tag :invoke ::fn (m/some ?fn) ::env ?extra-env} ?env]
                  (let [fn (interpret-template ?fn ?env)
-                       args (if (nil? ?args)
-                              [?env]
-                              (map #(interpret-template % ?env) ?args))]
-                   (tap> [{:?fn ?fn :?args ?args} {:fn fn :args args}])
+                       env (into ?env (interpret-template ?extra-env ?env))]
+                   (tap> {:?fn ?fn :extra-env ?extra-env})
                    (if (fn? fn)
                      (try
-                       (apply fn args)
+                       (fn env)
                        (catch Exception e
                          e))
                      (ex-info "Expression did not yeild a function"
@@ -369,5 +367,8 @@
  (emit {:! {:? [:fn]}}
        {:fn #(get % :var) :var 1}) := 1
  (emit {:! {:? :inc}
-        :!? [{:? :value}]}
-       {:inc inc :value 1}) := 2)
+        :!? {:num {:? :value}}}
+       {:inc #(-> %
+                  :num
+                  inc)
+        :value 1}) := 2)

@@ -127,6 +127,8 @@
                      []
                ; Properties
                      [:album/name :album/year]
+               ; All Props
+                     [*]
                ; Joins
                      [{:favorite-albums
                        [:album/name :album/year]}]

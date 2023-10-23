@@ -82,11 +82,7 @@
  (c data) := {:type "my-input"
               :props {:value 2
                       :label "Value:"}
-              :children []}
- (c {}) := {:type "my-input"
-            :props {:value nil
-                    :label "Value:"}
-            :children []})
+              :children []})
 
 (comment
   ;; End
