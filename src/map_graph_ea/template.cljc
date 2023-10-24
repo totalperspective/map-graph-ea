@@ -6,8 +6,14 @@
             [malli.registry :as mr]
             [malli.transform :as mt]
             [meander.epsilon :as m]
+            [com.wsscode.pathom3.connect.runner :as pcr]
             [sci.core :as sci])
   (:import [java.lang Exception]))
+
+(defn ->list
+  [x]
+  ;; (prn x)
+  (apply list x))
 
 (def spec
   {::directive-key [:orn
@@ -20,7 +26,7 @@
    ::property [:and
                :keyword
                [:not ::directive-key]]
-   ::scalar [:or :string :int :double :boolean]
+   ::scalar [:or :string :int :double :boolean :nil]
    ::path [:orn [:keyword :keyword] [:path [:vector :keyword]]]
    ::get [:map
           {:closed true}
@@ -39,8 +45,12 @@
 
    ::invoke [:map
              {:closed true}
-             [:! {:title "invoke"} ::path]
-             [:!? {:optional true} [:map-of ::property [:schema [:ref ::template]]]]]
+             [:! {:title "invoke"}
+              [:and
+               [:catn
+                [:invoke-key :symbol]
+                [:params [:? [:schema [:ref ::template]]]]]
+               [list? {:decode {:json ->list}}]]]]
    ::directive [:and
                 [:map-of :keyword any?]
                 [:orn
@@ -131,8 +141,8 @@
                          :<= {0 ["li" {:? :value}]
                               1 ["li.odd" {:? :value}]}}
                         ; Invoke
-                        {:! {:? :fn}
-                         :!? {:my-var {:? [:path :to :var]}}}})
+                        {:! (f 1)}
+                        {:! (f {:? :var})}})
 
  (->> template-forms
       (map (fn [form]
@@ -163,17 +173,15 @@
 
 (defn parse-form
   [expr]
-  #_{:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var]}
+  #_{:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var :unused-binding]}
   (m/rewrite
    expr
-   {:!? {& (m/seqable [!k !t] ...)}
-    & (m/cata ?rest)}
-   {::env {& [[!k (m/cata !t)] ...]}
-    & ?rest}
-
-   {:! (m/some ?x)}
+   {:! ((m/and (m/pred symbol?)
+               ?fn)
+        & ?args)}
    {::tag :invoke
-    ::fn (m/cata ?x)}
+    ::fn ?fn
+    ::args [& (m/cata ?args)]}
 
    {:<= {& (m/seqable [!k !t] ...)}
     & (m/cata ?rest)}
@@ -196,12 +204,20 @@
    {:?* (m/some [!xs ...]) & (m/cata ?rest)}
    {::tag :list
     ::path [!xs ...]
-    ::meta ?rest}
+    ::meta ?rest
+    ::index-fn nil
+    ::select-fn nil
+    ::env nil
+    ::rows nil}
 
    {:?* (m/some ?x) & (m/cata ?rest)}
    {::tag :list
     ::path [?x]
-    ::args ?rest}
+    ::args ?rest
+    ::index-fn nil
+    ::select-fn nil
+    ::env nil
+    ::rows nil}
 
    {:? [!xs ...]}
    {::tag :get
@@ -223,6 +239,12 @@
    ?x
    ?x))
 
+(defn invoker
+  [f]
+  (fn [& args]
+    (fn [_]
+      (apply f args))))
+
 #_{:clj-kondo/ignore [:syntax :unused-binding]}
 (defn interpret-template
   [expr env]
@@ -233,23 +255,38 @@
   (tap> expr)
   (let [result (m/match
                 [expr env]
+                 [{::pcr/attribute-errors (m/some ?error) & ?rest} ?env]
+                 (do
+                   (tap> {::error ?error})
+                   (interpret-template ?rest ?env))
+
                  [(m/and (m/pred keyword?) ?k) ?env]
                  (do
                    (tap> {:keyword ?k})
                    ?k)
 
-                 [{::tag :invoke ::fn (m/some ?fn) ::env ?extra-env} ?env]
-                 (let [fn (interpret-template ?fn ?env)
-                       env (into ?env (interpret-template ?extra-env ?env))]
-                   (tap> {:?fn ?fn :extra-env ?extra-env})
-                   (if (fn? fn)
+                 [{::tag :invoke ::fn (m/some ?fn) ::args ?args} ?env]
+                 (let [f (get ?env ?fn)
+                       args (mapv #(interpret-template % ?env) ?args)
+                       env ?env  #_(into ?env (interpret-template ?extra-env ?env))]
+                   (tap> {:fn f :args args})
+                   (if (fn? f)
                      (try
-                       (fn env)
+                       (let [f-env (apply f args)]
+                         (tap> {:fn* f-env :env env})
+                         (if (fn? f-env)
+                           (let [result (f-env env)]
+                             (tap> {:result result :env env})
+                             result)
+                           (ex-info "Invoke function did not return a function"
+                                    {:expr expr
+                                     :invoke f
+                                     :actual f-env})))
                        (catch Exception e
                          e))
                      (ex-info "Expression did not yeild a function"
                               {:expr ?fn
-                               :actual fn})))
+                               :actual f})))
                  (m/and
                   [{::tag :list
                     ::path ?path
@@ -308,8 +345,7 @@
                  (let [val (get-in ?env ?path)
                        result (interpret-template (parse-form val) ?env)]
                    (tap> {:get ?path :result val :final result})
-                   (when (not= result :com.wsscode.pathom3.error/attribute-unreachable)
-                     result))
+                   result)
 
                  [[!exprs ...] ?env]
                  (transduce (map #(interpret-template % ?env))
@@ -320,7 +356,7 @@
                  (reduce-kv (fn [m k v]
                               (assoc m k (interpret-template v ?env)))
                             {}
-                            ?rest)
+                            (into {} ?rest))
 
                  [?expr ?env]
                  ?expr)]
@@ -364,11 +400,6 @@
  (emit {:?* [:list]
         :<= {:* {:? [:.]}}}
        {:list :not-a-list}) := []
- (emit {:! {:? [:fn]}}
-       {:fn #(get % :var) :var 1}) := 1
- (emit {:! {:? :inc}
-        :!? {:num {:? :value}}}
-       {:inc #(-> %
-                  :num
-                  inc)
-        :value 1}) := 2)
+ (emit '{:! (inc {:? [:var]})}
+       {'inc (invoker inc)
+        :var 1}) := 2)

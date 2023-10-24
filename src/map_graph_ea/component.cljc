@@ -11,7 +11,8 @@
             [map-graph-ea.eql :refer [Query]]
             [map-graph-ea.template :as t :refer [Template]]
             [map-graph-ea.resolve :as r]
-            [meander.epsilon :as m]))
+            [meander.epsilon :as m]
+            [hasch.core :as h]))
 
 ;; Components are combine EQL queries and local resolvers to produce some content
 (def Component
@@ -41,13 +42,27 @@
              :a ['b :c 1]}) := [['bar :foo :baz]
                                 ['b :a :c 1]])
 
+(def cache (atom {}))
+
+(declare parse)
+
 ;; The parse take a component definition and returns a function.
 ;; The function, given an environment will run the compoent yeilding the content
 (defn parse-impl
   [{:keys [query resolve content] :as t}]
-  (let [indexes (->> resolve
+  (let [component-fn (fn [form]
+                       (let [c-hash (h/edn-hash form)
+                             cached-c (get @cache c-hash)]
+                         (if cached-c
+                           cached-c
+                           (let [c (parse form)]
+                             (swap! cache assoc c-hash c)
+                             c))))
+        indexes (->> resolve
                      resolvers
                      (mapv r/resolver)
+                     (into [(pbir/constantly-resolver :portal.rpc/id nil)
+                            (pbir/constantly-resolver 'component component-fn)])
                      pci/register)
         emit (t/emitter content)]
     (fn [env]
@@ -69,7 +84,8 @@
             message (me/humanize error)]
         (throw (ex-info "Invalid Component"
                         {:error message
-                         :detail (me/error-value error {::me/mask-valid-values '...})}))))))
+                         :detail (me/error-value error {::me/mask-valid-values '...})
+                         :full error}))))))
 
 (tests
  (def c (parse {:query ["some-value"]

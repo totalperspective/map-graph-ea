@@ -3,12 +3,12 @@
   (:require [map-graph-ea.component :as mge.c]))
 
 (def layout
-  {:query [:page :components :auth :menu]
-   :content {:type "default-layout"
-             :props {:header {:! {:? [:components :header]}}
-                     :menu {:! {:? [:components :menu]}}}
-             :children [{:type {:? [:page :type]}
-                         :content {:? [:page :content]}}]}})
+  '{:query [:page :components :auth :menu]
+    :content {:type "default-layout"
+              :props {:header {:! (component {:? [:components :header]})}
+                      :menu {:! (component {:? [:components :menu]})}}
+              :children [{:type {:? [:page :type]}
+                          :content {:? [:page :content]}}]}})
 
 (def header
   {:query  [:auth :page]
@@ -24,8 +24,8 @@
                         :<= {:* {:? []}}}}})
 
 (def components
-  {:header (mge.c/parse header)
-   :menu (mge.c/parse menu)})
+  {:header header
+   :menu menu})
 
 (def layouts
   {:default (mge.c/parse layout)})
@@ -37,16 +37,8 @@
           :auth {:user {:id 1 :name "Zaphod B"}}
           :menu {:items []}})
 
-(tap> env)
-(-> env
-    :components
-    :header
-    (apply [env]))
-
-(-> env
-    :components
-    :menu
-    (apply [env]))
-
-(let [page (:default layouts)]
-  (page env))
+(try
+  (let [page (:default layouts)]
+    (page env))
+  (catch Exception e
+    (ex-data e)))
