@@ -12,7 +12,8 @@
             [map-graph-ea.template :as t :refer [Template]]
             [map-graph-ea.resolve :as r]
             [meander.epsilon :as m]
-            [hasch.core :as h]))
+            [hasch.core :as h])
+  (:import [java.lang Exception]))
 
 ;; Components are combine EQL queries and local resolvers to produce some content
 (def Component
@@ -55,9 +56,12 @@
                              cached-c (get @cache c-hash)]
                          (if cached-c
                            cached-c
-                           (let [c (parse form)]
-                             (swap! cache assoc c-hash c)
-                             c))))
+                           (try
+                             (let [c (parse form)]
+                               (swap! cache assoc c-hash c)
+                               c)
+                             (catch Exception e
+                               (ex-data e))))))
         indexes (->> resolve
                      resolvers
                      (mapv r/resolver)

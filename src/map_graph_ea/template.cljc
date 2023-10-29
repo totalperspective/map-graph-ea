@@ -7,7 +7,8 @@
             [malli.transform :as mt]
             [meander.epsilon :as m]
             [com.wsscode.pathom3.connect.runner :as pcr]
-            [sci.core :as sci])
+            [sci.core :as sci]
+            [map-graph-ea.match :as mge.m])
   (:import [java.lang Exception]))
 
 (defn ->list
@@ -27,7 +28,10 @@
                :keyword
                [:not ::directive-key]]
    ::scalar [:or :string :int :double :boolean :nil]
-   ::path [:orn [:keyword :keyword] [:path [:vector :keyword]]]
+   ::path-expr [:orn
+                [:keyword :keyword]
+                [:logic-variable ::logic-var]]
+   ::path [:orn [:path-expr ::path-expr] [:path [:vector ::path-expr]]]
    ::get [:map
           {:closed true}
           [:? {:title "value"} ::path]]
@@ -67,18 +71,38 @@
    ::hiccup [:map
              {:closed true}
              [:<> ::hiccup-expr]]
+   ::logic-var [:and
+                :symbol
+                [:fn (fn lvar? [v]
+                       (and (symbol? v)
+                            (re-matches #"^?.+$" (name v))))]]
+   ::seq-pattern [:and
+                       vector?
+                       [:catn
+                        [:pattern [:+ [:schema [:ref ::pattern]]]]
+                        [:splat [:and :symbol [:= '...]]]]]
+   ::pattern [:orn
+              [:logic-variable ::logic-var]
+              [:sequence-pattern ::seq-pattern]
+              [:map-pattern [:map-of :keyword [:schema [:ref ::pattern]]]]]
+   ::match [:map
+            {:closed true}
+            [:$? {:title "pattern"} ::pattern]
+            [:$= {:title "rewrite"} [:schema [:ref ::template]]]]
    ::directive [:and
                 [:map-of :keyword any?]
                 [:orn
                  [:get ::get]
                  [:each ::each]
                  [:invoke ::invoke]
-                 [:hiccup ::hiccup]]]
+                 [:hiccup ::hiccup]
+                 [:match ::match]]]
                  ;
 
    ::template-expr [:orn
                     [:scalar ::scalar]
-                    [:directive ::directive]]
+                    [:directive ::directive]
+                    [:logic-variable ::logic-var]]
    ::template [:orn
                [:expr [:schema [:ref ::template-expr]]]
                [:object [:map-of ::property [:schema [:ref ::template]]]]
@@ -169,6 +193,16 @@
                         ; Hiccup
                         {:<> [:div.class {:id "div-id"} "string"]}
                         {:<> [:ul ([:li "1"] [:li "2"])]}
+                        ["span" {:class "red"} "world"]
+
+                        ; Pattern Matching
+                        {:$? {:key ?value}
+                         :$= ?value}
+                        {:$? {:key ?value}
+                         :$= [?value]}
+                        {:$? {:key ?value}
+                         :$= {:? [:path :to ?value]}}
+
                         ;
                         })
 
@@ -273,6 +307,12 @@
     ::props (m/cata ?props)
     ::children (m/cata ?children)}
 
+   {:$? (m/some ?pattern)
+    :$= (m/some ?expr)}
+   {::tag :match
+    ::match ?pattern
+    ::expr ?expr}
+
    (!xs ...)
    ((m/cata !xs) ...)
 
@@ -284,6 +324,8 @@
 
    ?x
    ?x))
+
+(def parse (comp parse-form parse-template))
 
 (defn invoker
   [f]
@@ -389,9 +431,14 @@
                                   ?array-sym))
                      []))
 
+                 [{::tag :match ::match ?match ::expr ?expr} ?env]
+                 (let [bindings (mge.m/interpret (mge.m/parse ?match) ?env {})
+                       new-form (mge.m/unify (mge.m/parse ?expr) bindings)]
+                   (tap> {:match ?match :expr ?expr :result new-form})
+                   (interpret-template (parse new-form) ?env))
                  [{::tag :get ::path ?path} ?env]
                  (let [val (get-in ?env ?path)
-                       result (interpret-template (parse-form val) ?env)]
+                       result (interpret-template (parse val) ?env)]
                    (tap> {:get ?path :result val :final result})
                    result)
 
@@ -430,9 +477,7 @@
 
 (defn emitter
   [content]
-  (let [template (-> content
-                     parse-template
-                     parse-form)]
+  (let [template (parse content)]
     (fn [ctx]
       (interpret-template template ctx))))
 
@@ -450,16 +495,17 @@
  (emit [1 2] {}) := [1 2]
  (emit {:a 1} {}) := {:a 1}
  (emit {:a {:? :foo} :b {:? :bar}} {:foo 3}) := {:a 3 :b nil}
- (emit {:a {:? :bar}} {:foo 4 :bar {:? :foo}}) := {:a 4}
+ (emit {:a {:? :bar}} {:foo 4 :bar {:? "foo"}}) := {:a 4}
  (emit {:?* [:list]
         :%> "(fn [idx _] (mod idx 2))"
         :<= {0 ["li" {:? [:.]}]
              1 ["li.odd" {:? [:.]}]}}
-       {:list [:first :second :third]})
- := [["li" :first] ["li.odd" :second] ["li" :third]]
+       {:list ["first" "second" "third"]})
+ := [["li" "first"] ["li.odd" "second"] ["li" "third"]]
  (emit {:?* [:list]
         :<= {:* {:? [:.]}}}
-       {:list [:first :second :third]}) := [:first :second :third]
+       {:list ["first" "second" "third"]})
+ := ["first" "second" "third"]
  (emit {:?* [:list]
         :<= {:* {:? [:.]}}}
        {:list :not-a-list}) := []
@@ -473,8 +519,11 @@
  (emit {:<> [:div {:? [:string]} {:? :partial}]}
        {:string "Hello,"
         :class "red"
-        :partial {:<> [:span {:class {:? :class}} "world"]}})
+        :partial {:<> ["span" {:class {:? :class}} "world"]}})
  := [:div "Hello," [:span {:class "red"} "world"]]
  (emit {:<> [:ul [[:li "1"] [:li "2"]]]} {}) := '[:ul ([:li "1"] [:li "2"])]
+ (emit '{:$? {:key ?value} :$= ?value} {:key 1}) := 1
+ (emit '{:$? {:key ?value} :$= [?value]} {:key 2}) := [2]
+ (emit '{:$? {:key ?value} :$= {:? [?value]}} {:key :val :val 3}) := 3
  ; End
  )
