@@ -13,6 +13,7 @@
                                  [:div {:ref (fn [el] (when el
                                                         (.render mermaid (str (gensym)) value #(set! (.-innerHTML el) %))))}])]))})
 
+ #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
  (def vue-vnode {:transform-fn clerk/mark-presented
                  :render-fn '(fn [value]
                                (when value

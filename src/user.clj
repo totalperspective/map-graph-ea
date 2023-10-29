@@ -7,6 +7,7 @@
 
 (clerk/serve! {:watch-paths ["notebooks" "src"]})
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (def p (p/open {:launcher :vs-code}))
 
 (add-tap #'p/submit) ; Add portal as a tap> target

@@ -102,6 +102,7 @@
   [form]
   (mc/validate Template form))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn valid-directive?
   [form]
   (mc/validate Directive form))

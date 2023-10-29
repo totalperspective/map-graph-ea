@@ -47,6 +47,7 @@
           :auth {:user {:id 1 :name "Zaphod B"}}
           :menu {:items []}})
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 ^:nextjournal.clerk/auto-expand-results?
 (def page (try
             (when layouts
