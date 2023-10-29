@@ -51,12 +51,29 @@
                 [:invoke-key :symbol]
                 [:params [:? [:schema [:ref ::template]]]]]
                [list? {:decode {:json ->list}}]]]]
+   ::hiccup-child-expr [:orn
+                        [:list
+                         [:and
+                          [:+ [:schema [:ref ::hiccup-expr]]]
+                          [list? {:decode {:json ->list}}]]]
+                        [:child
+                         [:schema [:ref ::template]]]]
+   ::hiccup-expr [:and
+                  vector?
+                  [:catn
+                   [:tag :keyword]
+                   [:props [:? [:map-of ::property [:schema [:ref ::template]]]]]
+                   [:children [:* ::hiccup-child-expr]]]]
+   ::hiccup [:map
+             {:closed true}
+             [:<> ::hiccup-expr]]
    ::directive [:and
                 [:map-of :keyword any?]
                 [:orn
                  [:get ::get]
                  [:each ::each]
-                 [:invoke ::invoke]]]
+                 [:invoke ::invoke]
+                 [:hiccup ::hiccup]]]
                  ;
 
    ::template-expr [:orn
@@ -79,10 +96,15 @@
   (mc/schema spec {:registry registry}))
 
 (def Template (schema ::template))
+(def Directive (schema ::directive))
 
 (defn valid-template?
-  [query]
-  (mc/validate Template query))
+  [form]
+  (mc/validate Template form))
+
+(defn valid-directive?
+  [form]
+  (mc/validate Directive form))
 
 (defn parse-template
   [form]
@@ -142,7 +164,12 @@
                               1 ["li.odd" {:? :value}]}}
                         ; Invoke
                         {:! (f 1)}
-                        {:! (f {:? :var})}})
+                        {:! (f {:? :var})}
+                        ; Hiccup
+                        {:<> [:div.class {:id "div-id"} "string"]}
+                        {:<> [:ul ([:li "1"] [:li "2"])]}
+                        ;
+                        })
 
  (->> template-forms
       (map (fn [form]
@@ -227,8 +254,26 @@
    {::tag :get
     ::path [?x]}
 
+   {:<> [?tag]}
+   (m/cata {:<> [?tag {}]})
+
+   {:<> [?tag
+         (m/and
+          (m/or
+           (m/not (m/pred map?))
+           (m/pred valid-directive?))
+          ?child)
+         & ?children]}
+   (m/cata {:<> [?tag {} ?child & ?children]})
+
+   {:<> [?tag (m/and (m/pred map?) ?props) & ?children]}
+   {::tag :hiccup
+    ::element ?tag
+    ::props (m/cata ?props)
+    ::children (m/cata ?children)}
+
    (!xs ...)
-   [(m/cata !xs) ...]
+   ((m/cata !xs) ...)
 
    [!xs ...]
    [(m/cata !xs) ...]
@@ -253,7 +298,9 @@
   (when (instance? Exception expr)
     (throw expr))
   (tap> expr)
-  (let [result (m/match
+  (let [interpret-template* (fn [env expr]
+                              (interpret-template expr env))
+        result (m/match
                 [expr env]
                  [{::pcr/attribute-errors (m/some ?error) & ?rest} ?env]
                  (do
@@ -267,8 +314,8 @@
 
                  [{::tag :invoke ::fn (m/some ?fn) ::args ?args} ?env]
                  (let [f (get ?env ?fn)
-                       args (mapv #(interpret-template % ?env) ?args)
-                       env ?env  #_(into ?env (interpret-template ?extra-env ?env))]
+                       args (mapv (partial interpret-template* ?env) ?args)
+                       env ?env]
                    (tap> {:fn f :args args})
                    (if (fn? f)
                      (try
@@ -347,8 +394,23 @@
                    (tap> {:get ?path :result val :final result})
                    result)
 
+                 [{::tag :hiccup
+                   ::element (m/some ?tag)
+                   ::props ?props
+                   ::children ?children}
+                  ?env]
+                 (let [expr (if (first ?props)
+                              [?tag (interpret-template ?props ?env)]
+                              [?tag])]
+                   (->> ?children
+                        (map (partial interpret-template* ?env))
+                        (into expr)))
+
+                 [(!exprs ...) ?env]
+                 (apply list (interpret-template !exprs ?env))
+
                  [[!exprs ...] ?env]
-                 (transduce (map #(interpret-template % ?env))
+                 (transduce (map (partial interpret-template* ?env))
                             conj
                             !exprs)
 
@@ -402,4 +464,16 @@
        {:list :not-a-list}) := []
  (emit '{:! (inc {:? [:var]})}
        {'inc (invoker inc)
-        :var 1}) := 2)
+        :var 1}) := 2
+ (emit {:<> [:div]} {}) := [:div]
+ (emit {:<> [:div {:prop "val"}]} {}) := [:div {:prop "val"}]
+ (emit {:<> [:div "string"]} {}) := [:div "string"]
+ (emit {:<> [:div {:? [:string]}]} {:string "string"}) := [:div "string"]
+ (emit {:<> [:div {:? [:string]} {:? :partial}]}
+       {:string "Hello,"
+        :class "red"
+        :partial {:<> [:span {:class {:? :class}} "world"]}})
+ := [:div "Hello," [:span {:class "red"} "world"]]
+ (emit {:<> [:ul [[:li "1"] [:li "2"]]]} {}) := '[:ul ([:li "1"] [:li "2"])]
+ ; End
+ )

@@ -2,7 +2,6 @@
 (ns basics
   {:nextjournal.clerk/toc true}
   (:require [nextjournal.clerk :as clerk]
-            ; [viewers :as v]
             [missionary.core :as m]
             ; [map-graph-ea.core :as mge]
             [com.wsscode.pathom3.connect.indexes :as pci]

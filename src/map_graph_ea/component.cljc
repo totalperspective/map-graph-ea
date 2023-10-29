@@ -75,10 +75,13 @@
           (emit smart-map)
           (throw (ex-info "Query failed" {:data data :map smart-map})))))))
 
+(defn valid-component? [spec]
+  (mc/validate Component spec))
+
 (defn parse
   [form]
   (let [spec (mc/decode Component form mt/json-transformer)]
-    (if (mc/validate Component spec)
+    (if (valid-component? spec)
       (parse-impl spec)
       (let [error (mc/explain  Component spec)
             message (me/humanize error)]
@@ -88,6 +91,7 @@
                          :full error}))))))
 
 (tests
+ "V node style"
  (def c (parse {:query ["some-value"]
                 :resolve {:init-value ["x-form" "some-value" "#(* % 2)"]}
                 :content {:type "my-input"
@@ -100,6 +104,15 @@
                       :label "Value:"}
               :children []})
 
+(tests
+ "Hiccup style"
+ (def c (parse {:query ["some-value"]
+                :resolve {:init-value ["x-form" "some-value" "#(* % 2)"]}
+                :content {:<> [:my-input {:value {:? ["init-value"]}
+                                          :label "Value:"}]}}))
+ (def data {:some-value 1})
+ (c data) := [:my-input {:value 2
+                         :label "Value:"}])
 (comment
   ;; End
   )
