@@ -4,12 +4,17 @@
 
 #_{:clj-kondo/ignore [:syntax :unused-binding :unresolved-var]}
 (defn parse [expr]
+  (tap> {:fn ::parse :expr expr})
   (m/rewrite expr
              [!xs ...]
              {:tag :vector
               :sequence [(m/cata !xs) ...]}
 
-             (m/symbol _ (m/re #"^?.*") :as ?symbol)
+             (!xs ...)
+             {:tag :list
+              :sequence [(m/cata !xs) ...]}
+
+             (m/symbol _ (m/re #"^\?.*") :as ?symbol)
              {:tag :logic-variable
               :symbol ?symbol}
 
@@ -21,7 +26,15 @@
              {:tag :expr
               :expr ?x}))
 
+(def sequences
+  {:vector {:pred vector?
+            :rest #(subvec % 1)}
+   :list {:pred list?
+          :rest rest}})
+
+#_{:clj-kondo/ignore [:syntax :unused-binding :unresolved-var]}
 (defn interpret [expr target env]
+  (tap> {::interpret [expr target env]})
   (m/match [expr target env]
 
     [{:tag :logic-variable :symbol ?symbol} ?target ?env]
@@ -31,22 +44,26 @@
         :fail)
       (assoc ?env ?symbol ?target))
 
-    ;; Ensure target is a vector
-    [{:tag :vector :checked nil :sequence ?sequence} ?target ?env]
-    (if (vector? ?target)
-      (interpret {:tag :vector :checked true :sequence ?sequence} ?target ?env)
-      :fail)
+    ;; Ensure target is the correct kind of sequence
+    [{:tag ?type :checked nil :sequence (m/some ?sequence)} ?target ?env]
+    (let [{:keys [pred]} (sequences ?type)]
+      (if (and pred (pred ?target))
+        (interpret {:tag ?type :checked true :sequence ?sequence} ?target ?env)
+        :fail))
 
-    [{:tag :vector :sequence []} _ ?env]
+    [{:sequence []} _ ?env]
     ?env
 
-    [{:tag :vector :sequence [?x]} ?target ?env]
+    [{:sequence [?x]} ?target ?env]
     (interpret ?x (nth ?target 0) ?env)
 
-    [{:tag :vector :checked ?checked :sequence [?x & ?rest]} ?target ?env]
-    (interpret {:tag :vector :checked ?checked :sequence ?rest}
-               (subvec ?target 1)
-               (interpret ?x (nth ?target 0) ?env))
+    [{:tag ?type :checked ?checked :sequence [?x & ?rest]} ?target ?env]
+    (let [{:keys [rest]} (sequences ?type)]
+      (if rest
+        (interpret {:tag ?type :checked ?checked :sequence ?rest}
+                   (rest ?target)
+                   (interpret ?x (nth ?target 0) ?env))
+        :fail))
 
     [{:tag :map :checked nil :entries ?entries} ?target ?env]
     (if (map? ?target)
@@ -68,6 +85,7 @@
     ?env))
 
 (defn unify [expr env]
+  (tap> {::unify [expr env]})
   (m/match [expr env]
     [{:tag :logic-variable :symbol ?symbol} ?env]
     (get ?env ?symbol)
@@ -77,6 +95,12 @@
 
     [{:tag :vector :sequence [& ?rest]} ?env]
     (mapv #(unify % ?env) ?rest)
+
+    [{:tag :list :sequence []} _]
+    ()
+
+    [{:tag :list :sequence [& ?rest]} ?env]
+    (apply list (map #(unify % ?env) ?rest))
 
     [{:tag :map :entries []} _]
     {}
@@ -94,6 +118,14 @@
 (tests
  (parse '?x) := '{:tag :logic-variable
                   :symbol ?x}
+ (parse 'x) := '{:tag :expr
+                 :expr x}
+
+ (parse '(?x ?y)) := '{:tag :list
+                       :sequence [{:tag :logic-variable
+                                   :symbol ?x}
+                                  {:tag :logic-variable
+                                   :symbol ?y}]}
 
  (parse '[?x ?y]) := '{:tag :vector
                        :sequence [{:tag :logic-variable
@@ -105,15 +137,27 @@
                        :entries [[:x {:tag :logic-variable
                                       :symbol ?x}]]}
 
+ (interpret (parse '[?x]) [1] {}) := '{?x 1}
+
  (interpret (parse '[?x ?y]) [1 2] {}) := '{?x 1 ?y 2}
+
+ (interpret (parse '(?x)) '(1) {}) := '{?x 1}
+
+ (interpret (parse '(?x ?y)) '(1 2) {}) := '{?x 1 ?y 2}
 
  (interpret (parse '{:x ?x :y ?y}) {:x 1 :y 2} {}) := '{?x 1 ?y 2}
 
  (unify (parse '?x) '{?x 1}) := 1
 
+ (unify (parse '[?x]) '{?x 1}) := [1]
+
  (unify (parse '[?x ?x]) '{?x 1}) := [1 1]
 
  (unify (parse '[?x ?y]) '{?x 1 ?y 2}) := [1 2]
+
+ (unify (parse '(?x)) '{?x 1}) := '(1)
+
+ (unify (parse '{:x ?x}) '{?x 1}) := {:x 1}
 
  (unify (parse '{:x ?x :y ?y}) '{?x 1 ?y 2}) := {:x 1 :y 2}
 
@@ -122,5 +166,8 @@
  (unify (parse '{:x ?x :y [{:z ?y}]}) '{?x 1 ?y 2}) := {:x 1 :y [{:z 2}]}
 
  (unify (parse '[:path :to ?value]) '{?value :val}) := [:path :to :val]
+
+ (unify (parse '{:! (component {:? [:components :layouts ?layout]})})
+        '{?layout :default})
+ := '{:! (component {:? [:components :layouts :default]})})
  ;
- )

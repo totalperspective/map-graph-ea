@@ -12,8 +12,7 @@
             [map-graph-ea.template :as t :refer [Template]]
             [map-graph-ea.resolve :as r]
             [meander.epsilon :as m]
-            [hasch.core :as h])
-  (:import [java.lang Exception]))
+            [hasch.core :as h]))
 
 ;; Components are combine EQL queries and local resolvers to produce some content
 (def Component
@@ -56,12 +55,9 @@
                              cached-c (get @cache c-hash)]
                          (if cached-c
                            cached-c
-                           (try
-                             (let [c (parse form)]
-                               (swap! cache assoc c-hash c)
-                               c)
-                             (catch Exception e
-                               (ex-data e))))))
+                           (let [c (parse form)]
+                             (swap! cache assoc c-hash c)
+                             c))))
         indexes (->> resolve
                      resolvers
                      (mapv r/resolver)
@@ -90,10 +86,10 @@
       (let [error (mc/explain  Component spec)
             message (me/humanize error)]
         (throw (ex-info "Invalid Component"
-                        {:error message
+                        {:component form
+                         :error message
                          :detail (me/error-value error {::me/mask-valid-values '...})
                          :full error}))))))
-
 (tests
  "V node style"
  (def c (parse {:query ["some-value"]
@@ -112,11 +108,12 @@
  "Hiccup style"
  (def c (parse {:query ["some-value"]
                 :resolve {:init-value ["x-form" "some-value" "#(* % 2)"]}
-                :content {:<> [:my-input {:value {:? ["init-value"]}
-                                          :label "Value:"}]}}))
+                :content {:<> [:div [:my-input
+                                     {:value {:? ["init-value"]}
+                                      :label "Value:"}]]}}))
  (def data {:some-value 1})
- (c data) := [:my-input {:value 2
-                         :label "Value:"}])
+ (c data) := [:div [:my-input {:value 2
+                               :label "Value:"}]])
 (comment
-  ;; End
+  ;; End.
   )

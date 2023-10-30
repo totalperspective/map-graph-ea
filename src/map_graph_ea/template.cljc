@@ -17,13 +17,20 @@
   (apply list x))
 
 (def spec
-  {::directive-key [:orn
-                    [:get [:= :?]]
-                    [:for [:= :?*]]
-                    [:row [:= :<=]]
-                    [:index-fn [:= :%>]]
-                    [:select [:= :=>]]
-                    [:rename [:= :#>]]]
+  {::directive-key [:and
+                    :keyword
+                    [:orn
+                     [:get [:= :?]]
+                     [:get-raw [:= :??]]
+                     [:for [:= :?*]]
+                     [:row [:= :<=]]
+                     [:index-fn [:= :%>]]
+                     [:select [:= :=>]]
+                     [:rename [:= :#>]]
+                     [:hiccup [:= :<>]]
+                     [:invoke [:= :!]]
+                     [:match-pattern [:= :$?]]
+                     [:match-expr [:= :$=]]]]
    ::property [:and
                :keyword
                [:not ::directive-key]]
@@ -35,6 +42,9 @@
    ::get [:map
           {:closed true}
           [:? {:title "value"} ::path]]
+   ::get-raw [:map
+              {:closed true}
+              [:?? {:title "value"} ::path]]
    ::row-test [:orn
                [:index :int]
                [:name :keyword]]
@@ -56,18 +66,20 @@
                 [:params [:? [:schema [:ref ::template]]]]]
                [list? {:decode {:json ->list}}]]]]
    ::hiccup-child-expr [:orn
+                        [:string :string]
+                        [:directive
+                         [:schema [:ref ::directive]]]
+                        [:hiccup [:schema [:ref ::hiccup-expr]]]
                         [:list
                          [:and
                           [:+ [:schema [:ref ::hiccup-expr]]]
-                          [list? {:decode {:json ->list}}]]]
-                        [:child
-                         [:schema [:ref ::template]]]]
+                          [list? {:decode {:json ->list}}]]]]
    ::hiccup-expr [:and
-                  vector?
                   [:catn
                    [:tag :keyword]
                    [:props [:? [:map-of ::property [:schema [:ref ::template]]]]]
-                   [:children [:* ::hiccup-child-expr]]]]
+                   [:children [:* ::hiccup-child-expr]]]
+                  vector?]
    ::hiccup [:map
              {:closed true}
              [:<> ::hiccup-expr]]
@@ -77,10 +89,10 @@
                        (and (symbol? v)
                             (re-matches #"^?.+$" (name v))))]]
    ::seq-pattern [:and
-                       vector?
-                       [:catn
-                        [:pattern [:+ [:schema [:ref ::pattern]]]]
-                        [:splat [:and :symbol [:= '...]]]]]
+                  vector?
+                  [:catn
+                   [:pattern [:+ [:schema [:ref ::pattern]]]]
+                   [:splat [:and :symbol [:= '...]]]]]
    ::pattern [:orn
               [:logic-variable ::logic-var]
               [:sequence-pattern ::seq-pattern]
@@ -90,9 +102,10 @@
             [:$? {:title "pattern"} ::pattern]
             [:$= {:title "rewrite"} [:schema [:ref ::template]]]]
    ::directive [:and
-                [:map-of :keyword any?]
+                [:map-of ::directive-key any?]
                 [:orn
                  [:get ::get]
+                 [:get-raw ::get-raw]
                  [:each ::each]
                  [:invoke ::invoke]
                  [:hiccup ::hiccup]
@@ -163,6 +176,10 @@
                         {:? :key}
                         {:? []} ; current value
                         {:? [:path :to :key]}
+                        ; Get Raw
+                        {:?? :key}
+                        {:?? []} ; current value
+                        {:?? [:path :to :key]}
                         ; Nested Get
                         {:foo {:bar {:? [:val]}}}
                         ; Arrays
@@ -192,7 +209,9 @@
                         {:! (f {:? :var})}
                         ; Hiccup
                         {:<> [:div.class {:id "div-id"} "string"]}
+                        {:<> [:ul [:li "1"] [:li "1"]]}
                         {:<> [:ul ([:li "1"] [:li "2"])]}
+                        {:<> [:div {} [:my-input] "test"]}
                         ["span" {:class "red"} "world"]
 
                         ; Pattern Matching
@@ -289,6 +308,14 @@
    {::tag :get
     ::path [?x]}
 
+   {:?? [!xs ...]}
+   {::tag :get-raw
+    ::path [!xs ...]}
+
+   {:?? (m/some ?x)}
+   {::tag :get-raw
+    ::path [?x]}
+
    {:<> [?tag]}
    (m/cata {:<> [?tag {}]})
 
@@ -368,15 +395,17 @@
                            (let [result (f-env env)]
                              (tap> {:result result :env env})
                              result)
-                           (ex-info "Invoke function did not return a function"
-                                    {:expr expr
-                                     :invoke f
-                                     :actual f-env})))
+                           (throw (ex-info "Invoke function did not return a function"
+                                           {:expr expr
+                                            :invoke f
+                                            :actual f-env}))))
                        (catch Exception e
-                         e))
-                     (ex-info "Expression did not yeild a function"
-                              {:expr ?fn
-                               :actual f})))
+                         (throw (ex-info "Failed to invoke fn"
+                                         {:expr ?fn :args args}
+                                         e))))
+                     (throw (ex-info "Expression did not yeild a function"
+                                     {:expr ?fn
+                                      :actual f}))))
                  (m/and
                   [{::tag :list
                     ::path ?path
@@ -436,10 +465,16 @@
                        new-form (mge.m/unify (mge.m/parse ?expr) bindings)]
                    (tap> {:match ?match :expr ?expr :result new-form})
                    (interpret-template (parse new-form) ?env))
+
                  [{::tag :get ::path ?path} ?env]
                  (let [val (get-in ?env ?path)
                        result (interpret-template (parse val) ?env)]
                    (tap> {:get ?path :result val :final result})
+                   result)
+
+                 [{::tag :get-raw ::path ?path} ?env]
+                 (let [result (get-in ?env ?path)]
+                   (tap> {:get-raw ?path :result val :final result})
                    result)
 
                  [{::tag :hiccup
@@ -496,6 +531,7 @@
  (emit {:a 1} {}) := {:a 1}
  (emit {:a {:? :foo} :b {:? :bar}} {:foo 3}) := {:a 3 :b nil}
  (emit {:a {:? :bar}} {:foo 4 :bar {:? "foo"}}) := {:a 4}
+ (emit {:a {:?? :bar}} {:foo 4 :bar {:? "foo"}}) := {:a {:? "foo"}}
  (emit {:?* [:list]
         :%> "(fn [idx _] (mod idx 2))"
         :<= {0 ["li" {:? [:.]}]
