@@ -473,7 +473,7 @@
                    result)
 
                  [{::tag :get-raw ::path ?path} ?env]
-                 (let [result (get-in ?env ?path)]
+                 (let [result (merge {} (get-in ?env ?path))]
                    (tap> {:get-raw ?path :result val :final result})
                    result)
 

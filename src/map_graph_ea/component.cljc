@@ -12,7 +12,8 @@
             [map-graph-ea.template :as t :refer [Template]]
             [map-graph-ea.resolve :as r]
             [meander.epsilon :as m]
-            [hasch.core :as h]))
+            [hasch.core :as h])
+  (:import [java.lang Exception]))
 
 ;; Components are combine EQL queries and local resolvers to produce some content
 (def Component
@@ -50,7 +51,7 @@
 ;; The function, given an environment will run the compoent yeilding the content
 (defn parse-impl
   [{:keys [query resolve content] :as t}]
-  (let [component-fn (fn [form]
+  (let [component-fn (fn component [form]
                        (let [c-hash (h/edn-hash form)
                              cached-c (get @cache c-hash)]
                          (if cached-c
@@ -65,7 +66,7 @@
                             (pbir/constantly-resolver 'component component-fn)])
                      pci/register)
         emit (t/emitter content)]
-    (fn [env]
+    (fn render [env]
       (tap> {:fn parse-impl :template t :env env})
       (let [data (p.eql/process (pci/register [(pbir/global-data-resolver env)])
                                 query)
@@ -80,16 +81,22 @@
 
 (defn parse
   [form]
+  (tap> {:fn ::parse
+         :form form})
   (let [spec (mc/decode Component form mt/json-transformer)]
+    (tap> {:fn ::parse
+           :spec spec})
     (if (valid-component? spec)
       (parse-impl spec)
-      (let [error (mc/explain  Component spec)
-            message (me/humanize error)]
-        (throw (ex-info "Invalid Component"
-                        {:component form
-                         :error message
-                         :detail (me/error-value error {::me/mask-valid-values '...})
-                         :full error}))))))
+      (let [error (mc/explain  Component spec)]
+        (try
+          (throw (ex-info "Invalid Component"
+                          {:component form
+                           :error (me/humanize error)
+                           :detail (me/error-value error {::me/mask-valid-values '...})
+                           :full error}))
+          (catch Exception e
+            (throw (ex-info "Unknown Error" {:error error} e))))))))
 (tests
  "V node style"
  (def c (parse {:query ["some-value"]
