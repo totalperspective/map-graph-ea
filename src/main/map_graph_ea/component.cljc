@@ -13,7 +13,7 @@
             [map-graph-ea.resolve :as r]
             [meander.epsilon :as m]
             [hasch.core :as h])
-  (:import [java.lang Exception]))
+  #?(:clj (:import [java.lang Exception])))
 
 ;; Components are combine EQL queries and local resolvers to produce some content
 (def Component
@@ -95,8 +95,8 @@
                            :error (me/humanize error)
                            :detail (me/error-value error {::me/mask-valid-values '...})
                            :full error}))
-          (catch Exception e
-            (throw (ex-info "Unknown Error" {:error error} e))))))))
+          (catch #?(:clj Exception :cljs js/Error) e
+            (throw (ex-info "Unknown js/Error" {:error error} e))))))))
 (tests
  "V node style"
  (def c (parse {:query ["some-value"]

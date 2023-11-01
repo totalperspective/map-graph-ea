@@ -17,3 +17,7 @@ pom.xml.asc
 .portal/
 .calva/
 .lsp/
+out/
+.shadow-cljs/
+node_modules/
+dist/

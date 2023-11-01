@@ -4,7 +4,7 @@
             [malli.error :as me]
             [malli.registry :as mr]
             [malli.transform :as mt])
-  (:import [java.lang Exception]))
+  #?(:clj (:import [java.lang Exception])))
 
 (defn ->list
   [x]
@@ -90,7 +90,7 @@
                (try
                  (schema key)
                  nil
-                 (catch Exception e
+                 (catch #?(:clj Exception :cljs js/Error) e
                    [key (ex-data e)]))))
         (into {})))
  (empty? errors) := true
@@ -163,7 +163,7 @@
       (map (fn [form]
              (try
                (parse-query form)
-               (catch Exception e
+               (catch #?(:clj Exception :cljs js/Error) e
                  (or (ex-data e)
                      (str e))))))
       (into #{}))
@@ -185,7 +185,7 @@
       (map (fn [form]
              (try
                (parse-mutation form)
-               (catch Exception e
+               (catch #?(:clj Exception :cljs js/Error) e
                  (or (ex-data e)
                      (str e))))))
       (into #{}))
@@ -202,7 +202,7 @@
       (map (fn [form]
              (try
                (parse-query form)
-               (catch Exception e
+               (catch #?(:clj Exception :cljs js/Error) e
                  (or (ex-data e)
                      (str e))))))
       (into #{}))
@@ -219,7 +219,7 @@
       (map (fn [form]
              (try
                (parse-mutation form)
-               (catch Exception e
+               (catch #?(:clj Exception :cljs js/Error) e
                  (or (ex-data e)
                      (str e))))))
       (into #{}))

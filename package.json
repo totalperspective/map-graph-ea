@@ -1,0 +1,31 @@
+{
+  "name": "@totalperspective/map-graph-ea",
+  "version": "1.0.1",
+  "description": "Custom made luxury maps",
+  "main": "dist/map_graph_ea.njs.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/totalperspective/map-graph-ea.git"
+  },
+  "author": "Bahul Neel Upadhyaya <dev@totalperspective.tech>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/totalperspective/map-graph-ea/issues"
+  },
+  "homepage": "https://github.com/totalperspective/map-graph-ea#readme",
+  "dependencies": {
+    "katex": "0.12.0",
+    "markdown-it": "12.3.2",
+    "markdown-it-block-image": "0.0.3",
+    "markdown-it-footnote": "3.0.3",
+    "markdown-it-texmath": "0.9.7",
+    "markdown-it-toc-done-right": "4.2.0",
+    "punycode": "2.1.1"
+  },
+  "devDependencies": {
+    "shadow-cljs": "^2.25.10"
+  }
+}

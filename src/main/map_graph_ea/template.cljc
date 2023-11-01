@@ -9,7 +9,7 @@
             [com.wsscode.pathom3.connect.runner :as pcr]
             [sci.core :as sci]
             [map-graph-ea.match :as mge.m])
-  (:import [java.lang Exception]))
+  #?(:clj (:import [java.lang Exception])))
 
 (defn ->list
   [x]
@@ -230,7 +230,7 @@
       (map (fn [form]
              (try
                (parse-template form)
-               (catch Exception e
+               (catch #?(:clj Exception :cljs js/Error) e
                  (or (ex-data e)
                      (str e))))))
       (into #{}))
@@ -247,7 +247,7 @@
       (map (fn [form]
              (try
                (parse-template form)
-               (catch Exception e
+               (catch #?(:clj Exception :cljs js/Error) e
                  (or (ex-data e)
                      (str e))))))
       (into #{}))
@@ -368,9 +368,9 @@
 #_{:clj-kondo/ignore [:syntax :unused-binding]}
 (defn interpret-template
   [expr env]
-  (when (instance? Exception env)
+  (when (instance? #?(:clj Exception :cljs js/Error) env)
     (throw env))
-  (when (instance? Exception expr)
+  (when (instance? #?(:clj Exception :cljs js/Error) expr)
     (throw expr))
   (tap> {:fn `interpret-template :expr expr})
   (let [interpret-template* (fn [env expr]
@@ -404,7 +404,7 @@
                                            {:expr expr
                                             :invoke f
                                             :actual f-env}))))
-                       (catch Exception e
+                       (catch #?(:clj Exception :cljs js/Error) e
                          (throw (ex-info "Failed to invoke fn"
                                          {:expr ?fn :args args}
                                          e))))
@@ -514,7 +514,7 @@
 
                  [?expr ?env]
                  ?expr)]
-                 (when (instance? Exception result)
+                 (when (instance? #?(:clj Exception :cljs js/Error) result)
                    (throw result))
                  (tap> {:fn `interpret-template :expr expr :env env :result result})
                  result))
