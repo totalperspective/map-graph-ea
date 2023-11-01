@@ -67,11 +67,11 @@
                      pci/register)
         emit (t/emitter content)]
     (fn render [env]
-      (tap> {:fn parse-impl :template t :env env})
+      (tap> {:fn `render :template t :env env})
       (let [data (p.eql/process (pci/register [(pbir/global-data-resolver env)])
                                 query)
             smart-map (psm/smart-map indexes data)]
-        (tap> {:fn 'render-component :query query :data data :map smart-map})
+        (tap> {:fn `render :query query :data data :map smart-map})
         (if (map? smart-map)
           (emit smart-map)
           (throw (ex-info "Query failed" {:data data :map smart-map})))))))
@@ -81,10 +81,10 @@
 
 (defn parse
   [form]
-  (tap> {:fn ::parse
+  (tap> {:fn `parse
          :form form})
   (let [spec (mc/decode Component form mt/json-transformer)]
-    (tap> {:fn ::parse
+    (tap> {:fn `parse
            :spec spec})
     (if (valid-component? spec)
       (parse-impl spec)

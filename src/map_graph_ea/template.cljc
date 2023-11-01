@@ -258,7 +258,7 @@
   (let [expr (if (map? form)
                (merge {} form)
                form)]
-    (tap> {::parse-form expr})
+    (tap> {:fn `parse-form :expr expr})
     #_ {:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var :unused-binding]}
     (m/rewrite
      expr
@@ -372,33 +372,33 @@
     (throw env))
   (when (instance? Exception expr)
     (throw expr))
-  (tap> expr)
+  (tap> {:fn `interpret-template :expr expr})
   (let [interpret-template* (fn [env expr]
                               (interpret-template expr env))
         result (m/match
                 [expr env]
                  [{::pcr/attribute-errors (m/some ?error) & ?rest} ?env]
                  (do
-                   (tap> {::error ?error})
+                   (tap> {:fn `interpret-template :error ?error})
                    (interpret-template ?rest ?env))
 
                  [(m/and (m/pred keyword?) ?k) ?env]
                  (do
-                   (tap> {:keyword ?k})
+                   (tap> {:fn `interpret-template :keyword ?k})
                    ?k)
 
                  [{::tag :invoke ::fn (m/some ?fn) ::args ?args} ?env]
                  (let [f (get ?env ?fn)
                        args (mapv (partial interpret-template* ?env) ?args)
                        env ?env]
-                   (tap> {:fn f :args args})
+                   (tap> {:fn `interpret-template :invoke f :args args})
                    (if (fn? f)
                      (try
                        (let [f-env (apply f args)]
-                         (tap> {:fn* f-env :env env})
+                         (tap> {:fn `interpret-template :fn* f-env :env env})
                          (if (fn? f-env)
                            (let [result (f-env env)]
-                             (tap> {:result result :env env})
+                             (tap> {:fn `interpret-template :result result :env env})
                              result)
                            (throw (ex-info "Invoke function did not return a function"
                                            {:expr expr
@@ -434,7 +434,7 @@
                                           (fn [row]
                                             (reduce-kv
                                              (fn [m k v]
-                                               (tap> [m k v])
+                                               (tap> {:fn `interpret-template :m m :k k :v v})
                                                (assoc m k (interpret-template v (with-meta
                                                                                   row
                                                                                   (meta ?env)))))
@@ -472,18 +472,18 @@
                  [{::tag :match ::match ?match ::expr ?expr} ?env]
                  (let [bindings (mge.m/interpret (mge.m/parse ?match) ?env {})
                        new-form (mge.m/unify (mge.m/parse ?expr) bindings)]
-                   (tap> {:match ?match :expr ?expr :result new-form})
+                   (tap> {:fn `interpret-template :match ?match :expr ?expr :result new-form})
                    (interpret-template (parse new-form) ?env))
 
                  [{::tag :get ::path ?path} ?env]
                  (let [val (get-in ?env ?path)
                        result (interpret-template (parse val) ?env)]
-                   (tap> {:get ?path :result val :final result})
+                   (tap> {:fn `interpret-template :get ?path :result val :final result})
                    result)
 
                  [{::tag :get-raw ::path ?path} ?env]
                  (let [result (merge {} (get-in ?env ?path))]
-                   (tap> {:get-raw ?path :result val :final result})
+                   (tap> {:fn `interpret-template :get-raw ?path :result val :final result})
                    result)
 
                  [{::tag :hiccup
@@ -516,7 +516,7 @@
                  ?expr)]
                  (when (instance? Exception result)
                    (throw result))
-                 (tap> {:fn 'interpret-template :expr expr :env env :result result})
+                 (tap> {:fn `interpret-template :expr expr :env env :result result})
                  result))
 
 (defn emitter

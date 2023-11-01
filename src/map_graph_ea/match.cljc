@@ -4,7 +4,7 @@
 
 #_{:clj-kondo/ignore [:syntax :unused-binding :unresolved-var]}
 (defn parse [expr]
-  (tap> {:fn ::parse :expr expr})
+  (tap> {:fn `parse :expr expr})
   (m/rewrite expr
              [!xs ...]
              {:tag :vector
@@ -34,7 +34,7 @@
 
 #_{:clj-kondo/ignore [:syntax :unused-binding :unresolved-var]}
 (defn interpret [expr target env]
-  (tap> {::interpret [expr target env]})
+  (tap> {:fn `interpret :expr expr :target target :env env})
   (m/match [expr target env]
 
     [{:tag :logic-variable :symbol ?symbol} ?target ?env]
@@ -85,7 +85,7 @@
     ?env))
 
 (defn unify [expr env]
-  (tap> {::unify [expr env]})
+  (tap> {:fn `unify :expr expr :env env})
   (m/match [expr env]
     [{:tag :logic-variable :symbol ?symbol} ?env]
     (get ?env ?symbol)
