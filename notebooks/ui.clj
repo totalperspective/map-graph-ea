@@ -32,10 +32,10 @@
       e)))
 
 (def menu
-  {:query [{:menu [{:items [:name :type :route]}]}]
+  {:query [{:menu [{:items [:href :label]}]}]
    :content {:<> [:ul.aside-menu
                   {:?* [:menu :items]
-                   :<= {:* ["li" ["a" {:href {:? :href}} {:? :label}]]}}]}})
+                   :<= {:* {:<> [:li [:a {:href {:? :href}} {:? :label}]]}}}]}})
 
 (when (not (mge.c/valid-component? menu))
   (try

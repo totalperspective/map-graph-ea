@@ -28,6 +28,7 @@
                      [:select [:= :=>]]
                      [:rename [:= :#>]]
                      [:hiccup [:= :<>]]
+                    ;;  [:hiccup [:= :<]]
                      [:invoke [:= :!]]
                      [:match-pattern [:= :$?]]
                      [:match-expr [:= :$=]]]]
@@ -253,104 +254,108 @@
  := template-forms)
 
 (defn parse-form
-  [expr]
-  #_{:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var :unused-binding]}
-  (m/rewrite
-   expr
-   {:! ((m/and (m/pred symbol?)
-               ?fn)
-        & ?args)}
-   {::tag :invoke
-    ::fn ?fn
-    ::args [& (m/cata ?args)]}
+  [form]
+  (let [expr (if (map? form)
+               (merge {} form)
+               form)]
+    (tap> {::parse-form expr})
+    #_ {:clj-kondo/ignore [:syntax :unresolved-symbol :unresolved-var :unused-binding]}
+    (m/rewrite
+     expr
+     {:! ((m/and (m/pred symbol?)
+                 ?fn)
+          & ?args)}
+     {::tag :invoke
+      ::fn ?fn
+      ::args [& (m/cata ?args)]}
 
-   {:<= {& (m/seqable [!k !t] ...)}
-    & (m/cata ?rest)}
-   {::rows {& [[!k (m/cata !t)] ...]}
-    & ?rest}
+     {:<= {& (m/seqable [!k !t] ...)}
+      & (m/cata ?rest)}
+     {::rows {& [[!k (m/cata !t)] ...]}
+      & ?rest}
 
-   {:#> {& (m/seqable [!k !p] ...)}
-    & (m/cata ?rest)}
-   {::env {& [[!k (m/cata {:? !p})] ...]}
-    & ?rest}
+     {:#> {& (m/seqable [!k !p] ...)}
+      & (m/cata ?rest)}
+     {::env {& [[!k (m/cata {:? !p})] ...]}
+      & ?rest}
 
-   {:=> (m/some ?fn) & (m/cata ?rest)}
-   {::select-fn ?fn
-    & ?rest}
+     {:=> (m/some ?fn) & (m/cata ?rest)}
+     {::select-fn ?fn
+      & ?rest}
 
-   {:%> (m/some ?fn) & (m/cata ?rest)}
-   {::index-fn ?fn
-    & ?rest}
+     {:%> (m/some ?fn) & (m/cata ?rest)}
+     {::index-fn ?fn
+      & ?rest}
 
-   {:?* (m/some [!xs ...]) & (m/cata ?rest)}
-   {::tag :list
-    ::path [!xs ...]
-    ::meta ?rest
-    ::index-fn nil
-    ::select-fn nil
-    ::env nil
-    ::rows nil}
+     {:?* (m/some [!xs ...]) & (m/cata ?rest)}
+     {::tag :list
+      ::path [!xs ...]
+      ::meta ?rest
+      ::index-fn nil
+      ::select-fn nil
+      ::env nil
+      ::rows nil}
 
-   {:?* (m/some ?x) & (m/cata ?rest)}
-   {::tag :list
-    ::path [?x]
-    ::args ?rest
-    ::index-fn nil
-    ::select-fn nil
-    ::env nil
-    ::rows nil}
+     {:?* (m/some ?x) & (m/cata ?rest)}
+     {::tag :list
+      ::path [?x]
+      ::args ?rest
+      ::index-fn nil
+      ::select-fn nil
+      ::env nil
+      ::rows nil}
 
-   {:? [!xs ...]}
-   {::tag :get
-    ::path [!xs ...]}
+     {:? [!xs ...]}
+     {::tag :get
+      ::path [!xs ...]}
 
-   {:? (m/some ?x)}
-   {::tag :get
-    ::path [?x]}
+     {:? (m/some ?x)}
+     {::tag :get
+      ::path [?x]}
 
-   {:?? [!xs ...]}
-   {::tag :get-raw
-    ::path [!xs ...]}
+     {:?? [!xs ...]}
+     {::tag :get-raw
+      ::path [!xs ...]}
 
-   {:?? (m/some ?x)}
-   {::tag :get-raw
-    ::path [?x]}
+     {:?? (m/some ?x)}
+     {::tag :get-raw
+      ::path [?x]}
 
-   {:<> [?tag]}
-   (m/cata {:<> [?tag {}]})
+     {:<> [?tag]}
+     (m/cata {:<> [?tag {}]})
 
-   {:<> [?tag
-         (m/and
-          (m/or
-           (m/not (m/pred map?))
-           (m/pred valid-directive?))
-          ?child)
-         & ?children]}
-   (m/cata {:<> [?tag {} ?child & ?children]})
+     {:<> [?tag
+           (m/and
+            (m/or
+             (m/not (m/pred map?))
+             (m/pred valid-directive?))
+            ?child)
+           & ?children]}
+     (m/cata {:<> [?tag {} ?child & ?children]})
 
-   {:<> [?tag (m/and (m/pred map?) ?props) & ?children]}
-   {::tag :hiccup
-    ::element ?tag
-    ::props (m/cata ?props)
-    ::children (m/cata ?children)}
+     {:<> [?tag (m/and (m/pred map?) ?props) & ?children]}
+     {::tag :hiccup
+      ::element ?tag
+      ::props (m/cata ?props)
+      ::children (m/cata ?children)}
 
-   {:$? (m/some ?pattern)
-    :$= (m/some ?expr)}
-   {::tag :match
-    ::match ?pattern
-    ::expr ?expr}
+     {:$? (m/some ?pattern)
+      :$= (m/some ?expr)}
+     {::tag :match
+      ::match ?pattern
+      ::expr ?expr}
 
-   (!xs ...)
-   ((m/cata !xs) ...)
+     (!xs ...)
+     ((m/cata !xs) ...)
 
-   [!xs ...]
-   [(m/cata !xs) ...]
+     [!xs ...]
+     [(m/cata !xs) ...]
 
-   {& (m/seqable [!k !v] ...)}
-   {& [[!k (m/cata !v)] ...]}
+     {& (m/seqable [!k !v] ...)}
+     {& [[!k (m/cata !v)] ...]}
 
-   ?x
-   ?x))
+     ?x
+     ?x)))
 
 (def parse (comp parse-form parse-template))
 
@@ -430,7 +435,9 @@
                                             (reduce-kv
                                              (fn [m k v]
                                                (tap> [m k v])
-                                               (assoc m k (interpret-template v row)))
+                                               (assoc m k (interpret-template v (with-meta
+                                                                                  row
+                                                                                  (meta ?env)))))
                                              {}
                                              ?rename))
                                           identity))
@@ -454,7 +461,9 @@
                                                   template (or (get ?rows idx)
                                                                (get ?rows index)
                                                                (:* ?rows))]
-                                              (interpret-template template (assoc m :.. ?env :. item)))
+                                              (interpret-template template (with-meta
+                                                                             (assoc m :.. ?env :. item)
+                                                                             (meta ?env))))
                                             item))))
                                   conj
                                   ?array-sym))
@@ -483,10 +492,10 @@
                    ::children ?children}
                   ?env]
                  (let [expr (if (first ?props)
-                              [?tag (interpret-template ?props ?env)]
+                              [?tag (interpret-template ?props ^::hiccup ?env)]
                               [?tag])]
                    (->> ?children
-                        (map (partial interpret-template* ?env))
+                        (map (partial interpret-template* ^::hiccup ?env))
                         (into expr)))
 
                  [(!exprs ...) ?env]
@@ -561,5 +570,13 @@
  (emit '{:$? {:key ?value} :$= ?value} {:key 1}) := 1
  (emit '{:$? {:key ?value} :$= [?value]} {:key 2}) := [2]
  (emit '{:$? {:key ?value} :$= {:? [?value]}} {:key :val :val 3}) := 3
+ (emit {:?* [:list]
+        :<= {:* {:<> [:li {:? [:.]}]}}}
+       {:list ["first" "second" "third"]})
+ := [[:li "first"] [:li "second"] [:li "third"]]
+  (emit {:<> [:ul {:?* [:list]
+                   :<= {:* {:<> [:li {:? [:.]}]}}}]}
+        {:list ["first" "second" "third"]})
+ := [:ul [[:li "first"] [:li "second"] [:li "third"]]]
  ; End
  )
